@@ -1,10 +1,13 @@
 {
   "name": "custom-domain-nginx",
-  "version": "1.0.3",
-  "description": "A module to automate per-domain Nginx configuration and SSL certificate setup.",
+  "version": "2.0.0",
+  "description": "A module to automate per-domain Nginx configuration and SSL certificate setup using a shell script.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "sudo cp ./bin/setup_domain.sh /usr/local/bin/setup_domain.sh && sudo chmod +x /usr/local/bin/setup_domain.sh"
+  },
+  "bin": {
+    "setup-domain-nginx": "./bin/setup_domain.sh"
   },
   "repository": {
     "type": "git",

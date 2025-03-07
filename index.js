@@ -1,13 +1,9 @@
 // index.js (CommonJS version)
-const fs = require('fs').promises;
-const { exec } = require('child_process');
-const { promisify } = require('util');
-
-const execAsync = promisify(exec);
+const { spawn } = require('child_process');
 
 /**
  * Validate the given domain.
- * This basic regex validates typical domains such as "example.com" or "sub.example.co.uk".
+ * This simple regex checks for domains like "example.com" or "sub.example.com".
  *
  * @param {string} domain
  * @returns {boolean}
@@ -18,181 +14,49 @@ function validateDomain(domain) {
 }
 
 /**
- * Default configuration options.
- */
-const defaultConfig = {
-  // Paths for Nginx configuration files.
-  nginxAvailablePath: '/etc/nginx/sites-available/', // Must include trailing slash.
-  nginxEnabledPath: '/etc/nginx/sites-enabled/',       // Must include trailing slash.
-  // Commands for testing and reloading Nginx.
-  nginxTestCmd: 'sudo nginx -t',
-  nginxReloadCmd: 'sudo systemctl reload nginx',
-  // Function to generate the Certbot command.
-  certbotCommand: (domain) => {
-    // If domain already starts with "www.", just use that.
-    if (domain.startsWith('www.')) {
-      return `sudo certbot certonly --nginx -d ${domain}`;
-    }
-    const parts = domain.split('.');
-    // If it's an apex domain (heuristic: exactly 2 parts), add both domain and www.domain.
-    if (parts.length === 2) {
-      return `sudo certbot certonly --nginx -d ${domain} -d www.${domain}`;
-    }
-    // Otherwise, assume it's a subdomain and do not add "www.".
-    return `sudo certbot certonly --nginx -d ${domain}`;
-  },
-  // Proxy destination for your ExpressJS app.
-  proxyPass: 'http://127.0.0.1:3000',
-  // Functions to determine the SSL certificate paths.
-  sslCertificatePath: (domain) =>
-    `/etc/letsencrypt/live/${domain}/fullchain.pem`,
-  sslCertificateKeyPath: (domain) =>
-    `/etc/letsencrypt/live/${domain}/privkey.pem`,
-};
-
-/**
- * Issue an SSL certificate using Certbot for the given domain.
- *
- * @param {string} domain - The custom domain (e.g., "example.com").
- * @param {object} config - Configuration options.
- * @throws {Error} If certificate issuance fails.
- */
-async function issueCertificate(domain, config) {
-  const command = config.certbotCommand(domain);
-  console.log(`Issuing certificate for ${domain} using command:`);
-  console.log(command);
-  try {
-    const { stdout } = await execAsync(command);
-    console.log(`Certificate issued for ${domain}:\n${stdout}`);
-  } catch (error) {
-    throw new Error(`Error issuing certificate: ${error.message}`);
-  }
-}
-
-/**
- * Generate an Nginx configuration for the given domain using the provided config.
- *
- * @param {string} domain - The custom domain.
- * @param {object} config - Configuration options.
- * @returns {string} The Nginx configuration content.
- */
-function generateNginxConfig(domain, config) {
-  // For apex domains, add "www." alias; for subdomains, only use the given domain.
-  const isApex = domain.split('.').length === 2;
-  const serverNames = isApex ? `${domain} www.${domain}` : domain;
-  return `
-# Redirect HTTP to HTTPS
-server {
-    listen 80;
-    server_name ${serverNames};
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name ${serverNames};
-
-    ssl_certificate ${config.sslCertificatePath(domain)};
-    ssl_certificate_key ${config.sslCertificateKeyPath(domain)};
-    
-    # Recommended SSL settings
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-
-    location / {
-        proxy_pass ${config.proxyPass};
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-`;
-}
-
-/**
- * Write the generated Nginx configuration to the sites-available directory.
- *
- * @param {string} domain - The custom domain.
- * @param {object} config - Configuration options.
- * @throws {Error} If writing the file fails.
- */
-async function writeNginxConfig(domain, config) {
-  const configContent = generateNginxConfig(domain, config);
-  const configPath = `${config.nginxAvailablePath}${domain}`;
-
-  try {
-    await fs.writeFile(configPath, configContent, { flag: 'w' });
-    console.log(`Nginx config for ${domain} written successfully at ${configPath}.`);
-  } catch (err) {
-    throw new Error(`Error writing config for ${domain}: ${err.message}`);
-  }
-}
-
-/**
- * Create (or update) a symbolic link in the sites-enabled directory to enable the site.
- *
- * @param {string} domain - The custom domain.
- * @param {object} config - Configuration options.
- * @throws {Error} If creating the symbolic link fails.
- */
-async function enableNginxConfig(domain, config) {
-  const src = `${config.nginxAvailablePath}${domain}`;
-  const dest = `${config.nginxEnabledPath}${domain}`;
-
-  try {
-    await execAsync(`sudo ln -sf ${src} ${dest}`);
-    console.log(`Nginx config for ${domain} enabled at ${dest}.`);
-  } catch (error) {
-    throw new Error(`Error enabling config for ${domain}: ${error.message}`);
-  }
-}
-
-/**
- * Test the Nginx configuration and reload Nginx if the test passes.
- *
- * @param {object} config - Configuration options.
- * @throws {Error} If the Nginx configuration test or reload fails.
- */
-async function testAndReloadNginx(config) {
-  try {
-    await execAsync(config.nginxTestCmd);
-    console.log(`Nginx configuration test passed. Reloading...`);
-    await execAsync(config.nginxReloadCmd);
-    console.log('Nginx reloaded successfully.');
-  } catch (error) {
-    throw new Error(`Nginx configuration test failed: ${error.message}`);
-  }
-}
-
-/**
- * Automates the process of adding a custom domain by:
- *   1. Issuing an SSL certificate.
- *   2. Writing the Nginx configuration.
- *   3. Enabling the configuration.
- *   4. Testing and reloading Nginx.
+ * Automates the process of adding a custom domain by calling a shell script.
  *
  * @param {string} domain - The custom domain (e.g., "example.com" or "sub.example.com").
  * @param {object} [userConfig={}] - Optional configuration overrides.
+ *   Supported keys (will be passed as environment variables):
+ *     - nginxAvailablePath (NGINX_AVAILABLE_PATH)
+ *     - nginxEnabledPath (NGINX_ENABLED_PATH)
+ *     - proxyPass (PROXY_PASS)
+ *     - renewThreshold (RENEW_THRESHOLD)
+ *     - scriptPath: The full path to the setup shell script (default: "/usr/local/bin/setup_domain.sh")
  * @returns {Promise<void>} Resolves when the domain setup completes successfully.
  */
-async function addDomain(domain, userConfig = {}) {
-  if (typeof domain !== 'string' || !validateDomain(domain)) {
-    throw new Error(`Invalid domain provided: ${domain}`);
-  }
-  
-  // Merge user-provided config with defaults.
-  const config = { ...defaultConfig, ...userConfig };
+function addDomain(domain, userConfig = {}) {
+  return new Promise((resolve, reject) => {
+    if (typeof domain !== 'string' || !validateDomain(domain)) {
+      return reject(new Error(`Invalid domain provided: ${domain}`));
+    }
+    const scriptPath = userConfig.scriptPath || '/usr/local/bin/setup_domain.sh';
 
-  try {
-    await issueCertificate(domain, config);
-    await writeNginxConfig(domain, config);
-    await enableNginxConfig(domain, config);
-    await testAndReloadNginx(config);
-    console.log(`Domain ${domain} setup completed successfully.`);
-  } catch (error) {
-    throw new Error(`Failed to set up domain ${domain}: ${error.message}`);
-  }
+    // Map allowed userConfig keys to corresponding environment variable names.
+    const envOverrides = {};
+    if (userConfig.nginxAvailablePath) envOverrides.NGINX_AVAILABLE_PATH = userConfig.nginxAvailablePath;
+    if (userConfig.nginxEnabledPath) envOverrides.NGINX_ENABLED_PATH = userConfig.nginxEnabledPath;
+    if (userConfig.proxyPass) envOverrides.PROXY_PASS = userConfig.proxyPass;
+    if (userConfig.renewThreshold) envOverrides.RENEW_THRESHOLD = String(userConfig.renewThreshold);
+
+    // Merge with current process.env.
+    const env = { ...process.env, ...envOverrides };
+
+    // Call the shell script with sudo.
+    const proc = spawn('sudo', [scriptPath, domain], { stdio: 'inherit', env });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`setup_domain.sh exited with code ${code}`));
+      }
+    });
+    proc.on('error', (err) => {
+      reject(err);
+    });
+  });
 }
 
 module.exports = { addDomain };
