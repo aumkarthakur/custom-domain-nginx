@@ -1,137 +1,127 @@
 # custom-domain-nginx
 
-**custom-domain-nginx** is a Node.js module that automates per-domain Nginx configuration and SSL certificate setup using Certbot. It streamlines the process of adding custom domains to your multi-tenant application by:
+**custom-domain-nginx** is a Node.js module that automates per-domain Nginx configuration and SSL certificate setup using a helper shell script. It issues (or renews) SSL certificates via Certbot, generates an Nginx configuration file, enables the configuration (via symbolic links), and reloads Nginx—all with a single command. This package supports user configuration via environment variables.
 
-- Issuing SSL certificates via Certbot.
-- Generating Nginx configuration files.
-- Enabling configurations by creating symbolic links.
-- Testing and reloading Nginx.
-
-With sensible defaults and the option to override settings (e.g., Nginx paths, commands, proxy destination), this module is flexible enough to work in various server environments.
+> **Note:**  
+> - This package requires that Nginx and Certbot are installed and properly configured on your system.  
+> - Some operations require elevated privileges. For secure non-interactive operation, please configure passwordless sudo for the helper script as described below.  
+> - The helper shell script is installed (copied to `/usr/local/bin`) automatically during postinstall if run with sudo.
 
 ## Features
 
-- **Automated Certificate Issuance:**  
-  Uses Certbot to automatically generate SSL certificates for your custom domains.
+- **Automated Certificate Issuance/Renewal:**  
+  Issues or renews SSL certificates using Certbot (skips issuance if a valid certificate exists).
   
-- **Dynamic Nginx Config Generation:**  
-  Automatically writes and enables Nginx configuration files tailored for each domain.
-  
-- **Customizable:**  
-  Override default paths, commands, and settings via an optional configuration object.
-  
-- **Error Handling & Basic Validation:**  
-  Provides basic domain validation and robust error handling for a smoother integration.
+- **Dynamic Nginx Configuration:**  
+  Generates an Nginx config file for the specified domain and creates the necessary symbolic links.
+
+- **Configurable Options:**  
+  Override default Nginx paths, proxy destination, and certificate renewal thresholds via environment variables.
+
+- **Integrated Helper Script:**  
+  Privileged operations are delegated to a shell script that is installed to `/usr/local/bin`.
 
 ## Installation
 
-Install via npm:
+Install the package via npm:
 
 ```bash
 npm install custom-domain-nginx
 ```
 
+**Postinstall Note:**
+The package includes a postinstall script that copies the helper shell script (`bin/setup_domain.sh`) to `/usr/local/bin/setup_domain.sh` and makes it executable. This step requires sudo privileges during installation. If you encounter issues, you may also install the helper script manually (see "Helper Script Installation" below).
+
+## Helper Script Installation (Manual Option)
+If you prefer to manually install the shell script, run:
+
+```bash
+sudo cp ./node_modules/custom-domain-nginx/bin/setup_domain.sh /usr/local/bin/setup_domain.sh
+sudo chmod +x /usr/local/bin/setup_domain.sh
+```
+
+Then configure passwordless sudo for the helper script by editing the sudoers file:
+
+```bash
+sudo visudo
+```
+
+Add the following line (replace `nodejs` with the user running your Node.js process if needed):
+
+```bash
+nodejs ALL=(ALL) NOPASSWD: /usr/local/bin/setup_domain.sh
+```
+
 ## Usage
-Import the module and call the addDomain function in your Node.js application:
+
+**Using the Node.js API**
+
+Import the `addDomain` function in your Node.js application:
 
 ```javascript
-// CommonJS usage
 const { addDomain } = require('custom-domain-nginx');
 
 (async () => {
   try {
     // Using default configuration
-    await addDomain('yourcustomdomain.com');
+    await addDomain('example.com');
     console.log('Domain setup completed!');
-  } catch (error) {
-    console.error('Error setting up domain:', error);
-  }
-})();
-```
-
-Or, with a custom configuration override:
-
-```javascript
-const { addDomain } = require('custom-domain-nginx');
-
-(async () => {
-  try {
-    await addDomain('anotherdomain.com', {
+    
+    // With configuration overrides:
+    await addDomain('sub.example.com', {
       nginxAvailablePath: '/custom/path/sites-available/',
       nginxEnabledPath: '/custom/path/sites-enabled/',
       proxyPass: 'http://127.0.0.1:4000',
-      nginxTestCmd: 'sudo /usr/local/nginx/sbin/nginx -t',
-      nginxReloadCmd: 'sudo /usr/local/nginx/sbin/nginx -s reload',
+      renewThreshold: 45, // days
+      // scriptPath can be overridden if you installed the helper script elsewhere.
+      scriptPath: '/usr/local/bin/setup_domain.sh'
     });
-    console.log('Domain setup with custom config completed!');
+    console.log('Subdomain setup completed with custom config!');
   } catch (error) {
     console.error('Error setting up domain:', error);
   }
 })();
 ```
 
-# API Documentation
+**Environment Variable Overrides**
 
-## Function: `addDomain(domain, [userConfig])`
+The helper shell script supports the following environment variables (with defaults):
 
-This function adds a custom domain with optional user configuration settings.
+- **NGINX_AVAILABLE_PATH:**  Path where the Nginx configuration file will be written.
 
-### Parameters
+  Default: `/etc/nginx/sites-available/` 
+  
+- **NGINX_ENABLED_PATH:** Path where the symlink will be created to enable the configuration.
 
-- **`domain`** (`string`):  
-  The custom domain (e.g., `example.com`). The module performs basic validation to ensure a valid domain is provided.
+  Default: `/etc/nginx/sites-enabled/`
 
-- **`userConfig`** (`object`, optional):  
-  An object that allows you to override default configuration options. The available keys include:
+- **PROXY_PASS:** The upstream proxy destination for your backend (e.g., your Express.js app).
 
-  - **`nginxAvailablePath`** (`string`):  
-    Path to the Nginx sites-available directory.  
-    **Default:** `/etc/nginx/sites-available/`
+  Default: `http://127.0.0.1:3000`
 
-  - **`nginxEnabledPath`** (`string`):  
-    Path to the Nginx sites-enabled directory.  
-    **Default:** `/etc/nginx/sites-enabled/`
+- **RENEW_THRESHOLD:** The minimum number of days the certificate must be valid before skipping issuance/renewal.
 
-  - **`nginxTestCmd`** (`string`):  
-    Command used to test the Nginx configuration.  
-    **Default:** `sudo nginx -t`
+  Default: `30` (days)
 
-  - **`nginxReloadCmd`** (`string`):  
-    Command used to reload Nginx.  
-    **Default:** `sudo systemctl reload nginx`
+You can set these variables in your Node.js code by passing them in via the userConfig object (as shown in the usage example) or by setting them in your shell environment before running your Node.js application.
 
-  - **`certbotCommand`** (`function(domain: string) => string`):  
-    A function that returns the Certbot command for certificate issuance.  
-    **Default:** Issues certificates for both `domain` and `www.domain`.
+## How It Works
 
-  - **`proxyPass`** (`string`):  
-    The upstream proxy destination for your backend server (e.g., your ExpressJS app).  
-    **Default:** `http://127.0.0.1:3000`
+1. **Certificate Management**:
+The helper shell script checks if a certificate already exists for the domain in `/etc/letsencrypt/live/<domain>/fullchain.pem`. It uses OpenSSL to determine if the certificate is valid for more than the specified `RENEW_THRESHOLD` days. If the certificate is expiring soon or not present, Certbot is used to issue (or renew) the certificate.
 
-  - **`sslCertificatePath`** (`function(domain: string) => string`):  
-    Function to determine the SSL certificate file path.  
-    **Default:** `/etc/letsencrypt/live/{domain}/fullchain.pem`
+2. **Nginx Configuration**:
+The script generates an Nginx configuration file. For apex domains (e.g., `example.com`), it automatically adds a `www.example.com` alias. For subdomains, only the specified domain is used.
 
-  - **`sslCertificateKeyPath`** (`function(domain: string) => string`):  
-    Function to determine the SSL certificate key file path.  
-    **Default:** `/etc/letsencrypt/live/{domain}/privkey.pem`
-
-## Security Considerations
-
-- **Elevated Privileges:**  
-  This module executes system commands using `sudo`. Ensure your environment is secure and that only trusted users have access to run this code.
-
-- **Domain Validation:**  
-  Basic domain validation is included. Enhance validation if your production environment requires stricter checks.
-
-- **Server Environment:**  
-  Intended for use on Linux-based servers with Nginx and Certbot installed. Test in a staging environment before deploying to production.
+3. **Deployment**:
+The configuration file is written to the path specified by `NGINX_AVAILABLE_PATH` and a symbolic link is created in `NGINX_ENABLED_PATH`. Finally, Nginx is tested and reloaded.
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome!  
-Feel free to open issues or submit pull requests.  
-Please ensure any contributions adhere to the established coding standards.
+Contributions, issues, and feature requests are welcome!
+
+Feel free to open issues or submit pull requests. Please ensure that any contributions adhere to established coding standards and security best practices.
 
 ## License
+
 This project is licensed under the MIT License.
