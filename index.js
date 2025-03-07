@@ -1,7 +1,6 @@
-// index.js
-import { writeFile } from 'fs/promises';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+const { writeFile } = require('fs').promises;
+const { exec } = require('child_process');
+const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 
@@ -21,18 +20,13 @@ function validateDomain(domain) {
  * Default configuration options.
  */
 const defaultConfig = {
-  // Paths for Nginx configuration files.
   nginxAvailablePath: '/etc/nginx/sites-available/', // Must include trailing slash.
   nginxEnabledPath: '/etc/nginx/sites-enabled/',       // Must include trailing slash.
-  // Commands for testing and reloading Nginx.
   nginxTestCmd: 'sudo nginx -t',
   nginxReloadCmd: 'sudo systemctl reload nginx',
-  // Function to generate the Certbot command.
   certbotCommand: (domain) =>
     `sudo certbot certonly --nginx -d ${domain} -d www.${domain}`,
-  // Proxy destination for your ExpressJS app.
   proxyPass: 'http://127.0.0.1:3000',
-  // Functions to determine the SSL certificate paths.
   sslCertificatePath: (domain) =>
     `/etc/letsencrypt/live/${domain}/fullchain.pem`,
   sslCertificateKeyPath: (domain) =>
@@ -180,4 +174,4 @@ async function addDomain(domain, userConfig = {}) {
   }
 }
 
-export default addDomain;
+module.exports = { addDomain };
