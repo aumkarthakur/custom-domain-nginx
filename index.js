@@ -1,6 +1,7 @@
-const { writeFile } = require('fs').promises;
-const { exec } = require('child_process');
-const { promisify } = require('util');
+// index.js
+import { writeFile } from 'fs/promises';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
@@ -20,13 +21,29 @@ function validateDomain(domain) {
  * Default configuration options.
  */
 const defaultConfig = {
+  // Paths for Nginx configuration files.
   nginxAvailablePath: '/etc/nginx/sites-available/', // Must include trailing slash.
   nginxEnabledPath: '/etc/nginx/sites-enabled/',       // Must include trailing slash.
+  // Commands for testing and reloading Nginx.
   nginxTestCmd: 'sudo nginx -t',
   nginxReloadCmd: 'sudo systemctl reload nginx',
-  certbotCommand: (domain) =>
-    `sudo certbot certonly --nginx -d ${domain} -d www.${domain}`,
+  // Function to generate the Certbot command.
+  certbotCommand: (domain) => {
+    // If domain already starts with "www.", just use that.
+    if (domain.startsWith('www.')) {
+      return `sudo certbot certonly --nginx -d ${domain}`;
+    }
+    const parts = domain.split('.');
+    // If it's an apex domain (heuristic: exactly 2 parts), add both domain and www.domain.
+    if (parts.length === 2) {
+      return `sudo certbot certonly --nginx -d ${domain} -d www.${domain}`;
+    }
+    // Otherwise, assume it's a subdomain (or a multi-part apex domain) and do not add "www.".
+    return `sudo certbot certonly --nginx -d ${domain}`;
+  },
+  // Proxy destination for your ExpressJS app.
   proxyPass: 'http://127.0.0.1:3000',
+  // Functions to determine the SSL certificate paths.
   sslCertificatePath: (domain) =>
     `/etc/letsencrypt/live/${domain}/fullchain.pem`,
   sslCertificateKeyPath: (domain) =>
@@ -36,13 +53,14 @@ const defaultConfig = {
 /**
  * Issue an SSL certificate using Certbot for the given domain.
  *
- * @param {string} domain - The custom domain (e.g., "yogastudio.com").
+ * @param {string} domain - The custom domain (e.g., "example.com").
  * @param {object} config - Configuration options.
  * @throws {Error} If certificate issuance fails.
  */
 async function issueCertificate(domain, config) {
   const command = config.certbotCommand(domain);
-  console.log(`Issuing certificate for ${domain}...`);
+  console.log(`Issuing certificate for ${domain} using command:`);
+  console.log(command);
   try {
     const { stdout } = await execAsync(command);
     console.log(`Certificate issued for ${domain}:\n${stdout}`);
@@ -63,13 +81,13 @@ function generateNginxConfig(domain, config) {
 # Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name ${domain} www.${domain};
+    server_name ${domain} ${domain.split('.').length === 2 ? `www.${domain}` : ''};
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
-    server_name ${domain} www.${domain};
+    server_name ${domain} ${domain.split('.').length === 2 ? `www.${domain}` : ''};
 
     ssl_certificate ${config.sslCertificatePath(domain)};
     ssl_certificate_key ${config.sslCertificateKeyPath(domain)};
@@ -151,7 +169,7 @@ async function testAndReloadNginx(config) {
  *   3. Enabling the configuration.
  *   4. Testing and reloading Nginx.
  *
- * @param {string} domain - The custom domain (e.g., "yogastudio.com").
+ * @param {string} domain - The custom domain (e.g., "example.com" or "sub.example.com").
  * @param {object} [userConfig={}] - Optional configuration overrides.
  * @returns {Promise<void>} Resolves when the domain setup completes successfully.
  */
@@ -174,4 +192,4 @@ async function addDomain(domain, userConfig = {}) {
   }
 }
 
-module.exports = { addDomain };
+export default addDomain;

@@ -1,6 +1,6 @@
 {
   "name": "custom-domain-nginx",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A module to automate per-domain Nginx configuration and SSL certificate setup.",
   "main": "index.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "custom",
     "domain",
     "automation",
-    "nodejs"
+    "nodejs",
+    "commonjs"
   ],
   "author": "Aumkar Thakur",
   "license": "MIT",
