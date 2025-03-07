@@ -29,11 +29,12 @@ Install the package via npm:
 npm install custom-domain-nginx
 ```
 
-**Postinstall Note:**
-The package includes a postinstall script that copies the helper shell script (`bin/setup_domain.sh`) to `/usr/local/bin/setup_domain.sh` and makes it executable. This step requires sudo privileges during installation. If you encounter issues, you may also install the helper script manually (see "Helper Script Installation" below).
+> **Important:**  
+> The helper script **must** be installed for this package to work. The package will not function without the helper script being properly installed and configured with sudo permissions. Please follow the "Helper Script Installation" section below before using the package.
 
-## Helper Script Installation (Manual Option)
-If you prefer to manually install the shell script, run:
+
+## Helper Script Installation
+To install the helper shell script, run:
 
 ```bash
 sudo cp ./node_modules/custom-domain-nginx/bin/setup_domain.sh /usr/local/bin/setup_domain.sh
