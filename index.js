@@ -1,7 +1,7 @@
-// index.js
-import { writeFile } from 'fs/promises';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+// index.js (CommonJS version)
+const fs = require('fs').promises;
+const { exec } = require('child_process');
+const { promisify } = require('util');
 
 const execAsync = promisify(exec);
 
@@ -38,7 +38,7 @@ const defaultConfig = {
     if (parts.length === 2) {
       return `sudo certbot certonly --nginx -d ${domain} -d www.${domain}`;
     }
-    // Otherwise, assume it's a subdomain (or a multi-part apex domain) and do not add "www.".
+    // Otherwise, assume it's a subdomain and do not add "www.".
     return `sudo certbot certonly --nginx -d ${domain}`;
   },
   // Proxy destination for your ExpressJS app.
@@ -77,17 +77,20 @@ async function issueCertificate(domain, config) {
  * @returns {string} The Nginx configuration content.
  */
 function generateNginxConfig(domain, config) {
+  // For apex domains, add "www." alias; for subdomains, only use the given domain.
+  const isApex = domain.split('.').length === 2;
+  const serverNames = isApex ? `${domain} www.${domain}` : domain;
   return `
 # Redirect HTTP to HTTPS
 server {
     listen 80;
-    server_name ${domain} ${domain.split('.').length === 2 ? `www.${domain}` : ''};
+    server_name ${serverNames};
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl;
-    server_name ${domain} ${domain.split('.').length === 2 ? `www.${domain}` : ''};
+    server_name ${serverNames};
 
     ssl_certificate ${config.sslCertificatePath(domain)};
     ssl_certificate_key ${config.sslCertificateKeyPath(domain)};
@@ -119,7 +122,7 @@ async function writeNginxConfig(domain, config) {
   const configPath = `${config.nginxAvailablePath}${domain}`;
 
   try {
-    await writeFile(configPath, configContent, { flag: 'w' });
+    await fs.writeFile(configPath, configContent, { flag: 'w' });
     console.log(`Nginx config for ${domain} written successfully at ${configPath}.`);
   } catch (err) {
     throw new Error(`Error writing config for ${domain}: ${err.message}`);
@@ -192,4 +195,4 @@ async function addDomain(domain, userConfig = {}) {
   }
 }
 
-export default addDomain;
+module.exports = { addDomain };

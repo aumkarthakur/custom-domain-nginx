@@ -1,6 +1,6 @@
 {
   "name": "custom-domain-nginx",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "A module to automate per-domain Nginx configuration and SSL certificate setup.",
   "main": "index.js",
   "scripts": {
