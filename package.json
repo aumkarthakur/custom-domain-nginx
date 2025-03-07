@@ -1,0 +1,28 @@
+{
+  "name": "custom-domain-nginx",
+  "version": "1.0.0",
+  "description": "A module to automate per-domain Nginx configuration and SSL certificate setup.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aumkarthakur/custom-domain-nginx.git"
+  },
+  "keywords": [
+    "nginx",
+    "ssl",
+    "certbot",
+    "custom",
+    "domain",
+    "automation",
+    "nodejs"
+  ],
+  "author": "Aumkar Thakur",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aumkarthakur/custom-domain-nginx/issues"
+  },
+  "homepage": "https://github.com/aumkarthakur/custom-domain-nginx#readme"
+}
