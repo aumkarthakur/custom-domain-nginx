@@ -1,10 +1,11 @@
 {
   "name": "custom-domain-nginx",
-  "version": "2.0.1",
+  "version": "2.0.4",
   "description": "A module to automate per-domain Nginx configuration and SSL certificate setup using a shell script.",
   "main": "index.js",
   "scripts": {
-    "postinstall": "node ./postinstall.js"
+    "postinstall": "echo '\n🚨 IMPORTANT: This package requires a helper script to work properly.\nPlease install it by following the instructions at:\nhttps://www.npmjs.com/package/custom-domain-nginx#helper-script-installation\n'",
+    "posti": "echo '\n🚨 IMPORTANT: This package requires a helper script to work properly.\nPlease install it by following the instructions at:\nhttps://www.npmjs.com/package/custom-domain-nginx#helper-script-installation\n'"
   },
   "bin": {
     "setup-domain-nginx": "./bin/setup_domain.sh"
